@@ -1,3 +1,9 @@
+ -- Using database,schema and role 
+use database UTIL_DB;
+use schema PUBLIC;
+use role ACCOUNTADMIN;
+
+
 --DORA CHECK 1
 select GRADER(step, (actual = expected), actual, expected, description) as graded_results from (
  SELECT
