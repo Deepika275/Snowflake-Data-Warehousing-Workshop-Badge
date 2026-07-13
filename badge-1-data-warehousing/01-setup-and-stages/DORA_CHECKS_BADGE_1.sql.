@@ -1,4 +1,5 @@
  -- Using database,schema and role 
+
 CREATE DATABASE DEMO_DB;
 CREATE DATABASE UTIL_DB;
 
