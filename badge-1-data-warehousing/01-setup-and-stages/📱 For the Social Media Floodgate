@@ -1,0 +1,100 @@
+-- Create the database
+CREATE OR REPLACE DATABASE SOCIAL_MEDIA_FLOODGATES;
+
+-- Ensure we are using the correct database and schema
+USE DATABASE SOCIAL_MEDIA_FLOODGATES;
+USE SCHEMA PUBLIC;
+
+-- Create the TWEET_INGEST table with a VARIANT column for JSON
+CREATE OR REPLACE TABLE TWEET_INGEST (
+    RAW_STATUS VARIANT
+);
+
+-- Create a JSON File Format
+CREATE OR REPLACE FILE FORMAT my_json_format
+    TYPE = 'JSON'
+    STRIP_OUTER_ARRAY = TRUE; 
+    -- Note: STRIP_OUTER_ARRAY = TRUE is crucial if your file wraps the 9 tweets in a JSON array [{}, {}...] so Snowflake loads them as 9 separate rows.
+
+-- Create an internal stage to hold the tweet file
+CREATE OR REPLACE STAGE my_tweet_stage
+    FILE_FORMAT = my_json_format;
+
+
+-- Ingest data into the target table
+COPY INTO TWEET_INGEST
+FROM @my_tweet_stage
+FILE_FORMAT = (FORMAT_NAME = my_json_format);
+
+-- Verify that all 9 rows were successfully loaded
+SELECT raw_status
+FROM tweet_ingest;
+
+-- Drill down to isolate the entities sub-object (contains hashtags, urls, etc.)
+SELECT raw_status:entities
+FROM tweet_ingest;
+
+-- Extract the raw hashtags array
+SELECT raw_status:entities:hashtags
+FROM tweet_ingest;
+
+-- Access only the first hashtag text string for each tweet using array bracket syntax
+SELECT raw_status:entities:hashtags[0].text
+FROM tweet_ingest;
+
+-- Filter out rows where the first hashtag element does not exist
+SELECT raw_status:entities:hashtags[0].text
+FROM tweet_ingest
+WHERE raw_status:entities:hashtags[0].text IS NOT NULL;
+
+-- Cast the 'created_at' string timestamp into a clean Snowflake DATE and sort chronologically
+SELECT raw_status:created_at::DATE
+FROM tweet_ingest
+ORDER BY raw_status:created_at::DATE;
+
+-- Flatten nested URLs array using a LATERAL JOIN syntax
+SELECT value
+FROM tweet_ingest
+, LATERAL FLATTEN (input => raw_status:entities:urls);
+
+-- Alternative flattening syntax using the TABLE() function wrapper
+SELECT value
+FROM tweet_ingest
+, TABLE(FLATTEN(input => raw_status:entities:urls));
+
+-- Flatten the nested hashtags array and cast the variant text to VARCHAR
+SELECT value:text::VARCHAR AS hashtag_used
+FROM tweet_ingest
+, LATERAL FLATTEN (input => raw_status:entities:hashtags);
+
+-- Extract User Name, Tweet ID, and all associated hashtags in a flattened relational view
+SELECT 
+    raw_status:user:name::TEXT AS user_name,
+    raw_status:id AS tweet_id,
+    value:text::VARCHAR AS hashtag_used
+FROM tweet_ingest
+, LATERAL FLATTEN (input => raw_status:entities:hashtags);
+
+-- NOTRMALISE THE HASHTAG
+
+CREATE OR REPLACE VIEW social_media_floodgates.public.urls_normalized AS (
+    SELECT 
+        raw_status:user:name::TEXT AS user_name,
+        raw_status:id::BIGINT AS tweet_id,            -- Casted explicitly to BIGINT for cleaner joins
+        value:display_url::TEXT AS url_used
+    FROM social_media_floodgates.public.tweet_ingest,
+    LATERAL FLATTEN (input => raw_status:entities:urls)
+);
+
+SELECT * FROM social_media_floodgates.public.urls_normalized;
+
+CREATE OR REPLACE VIEW social_media_floodgates.public.hashtags_normalized AS (
+    SELECT 
+        raw_status:user:name::TEXT AS user_name,
+        raw_status:id::BIGINT AS tweet_id,
+        value:text::VARCHAR AS hashtag_used
+    FROM social_media_floodgates.public.tweet_ingest,
+    LATERAL FLATTEN (input => raw_status:entities:hashtags)
+);
+
+SELECT * FROM social_media_floodgates.public.hashtags_normalized;
