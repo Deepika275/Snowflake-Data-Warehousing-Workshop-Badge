@@ -50,6 +50,14 @@ select * from author;
 -- QUERY THE SEQUENCE
 use role sysadmin;
 
+-- CREATING SEQUENCE 
+
+--> DATABASE EXPLORER --> LIBRARY_CARD_CATALOG --> PUBLIC SCHEMA --> CREATE SEQUENCE
+create sequence SEQ_AURTHOR_UID
+start = 1
+increment = 1
+comment = 'Use this to fill in AURTHOR_UID';
+
 //See how the nextval function works
 select SEQ_AURTHOR_UID.nextval,  SEQ_AURTHOR_UID.nextval;
 
