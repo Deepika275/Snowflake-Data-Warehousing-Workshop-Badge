@@ -1,0 +1,158 @@
+-- TO CREATE DATABASE GARDEN_PLANTS WE USE SYSROLE
+   USE ROLE SYSADMIN; 
+
+
+-- CREATING DATABASE
+   CREATE DATABASE GARDEN_PLANTS;
+
+
+ -- WE HAVE DROPPED THE PUBLIC SCHEMA IN GARDEN_PLANTS
+
+
+-- CREATED THREE SCHEMA IN GARDEN_PLANTS
+   CREATE SCHEMA VEGGIES;
+   CREATE SCHEMA FRUITS;
+   CREATE SCHEMA FLOWERS;
+   
+
+-- RETRIEVING DATA FROM META DATA NOT FROM TABLES
+   select * 
+   from garden_plants.information_schema.schemata;
+
+
+
+-- CREATING A VEGETABLE DETAILS TABLE
+
+create table garden_plants.veggies.vegetable_details
+(
+plant_name varchar(25)
+, root_depth_code varchar(1)    
+);
+
+
+-- AFTER LOADING DATA JUST CHECKING WITH SOME RANDOM SQL CODE
+GARDEN_PLANTS.VEGGIES.VEGETABLE_DETAILS
+SELECT * FROM VEGETABLE_DETAILS
+LIMIT 10;
+
+SELECT * FROM VEGETABLE_DETAILS;
+
+delete FROM VEGETABLE_DETAILS
+WHERE PLANT_NAME = 'Spinach'
+and root_depth_code = 'D';
+
+SELECT * FROM VEGETABLE_DETAILS;
+
+-- CREATING A NEW TABLE FROM BY COPYING THE VEGETABLE_DETAILS TABLE AND RENAMING IT TO FLOWER_DETAILS
+create or replace TABLE FLOWER_DETAILS (
+	PLANT_NAME VARCHAR(25),
+	ROOT_DEPTH_CODE VARCHAR(1)
+);
+
+UPDATE flower_details
+SET rdc = 'S'
+WHERE fn = 'Sunflower';
+
+ALTER TABLE garden_plants.flowers.flower_details_clean
+RENAME TO flower_details;
+
+SELECT *
+FROM garden_plants.flowers.flower_details;
+
+CREATE TABLE GARDEN_PLANTS.FRUITS.FRUIT_DETAILS (
+    FRUIT_NAME VARCHAR,
+    ROOT_DEPTH_CODE VARCHAR
+);
+
+
+-- creating new table vegetables_details_soil_type in gardenplants --> veggies
+
+create or replace table vegetable_details_soil_type
+( plant_name varchar(25)
+ ,soil_type number(1,0)
+);
+
+
+-- creating CSV file format
+
+create file format garden_plants.veggies.PIPECOLSEP_ONEHEADROW 
+    type = 'CSV'--csv is used for any flat file (tsv, pipe-separated, etc)
+    field_delimiter = '|' --pipes as column separators
+    skip_header = 1 --one header row to skip
+    ;
+
+    -- a copy into statement
+    copy into vegetable_details_soil_type
+from @util_db.public.my_internal_stage
+files = ( 'VEG_NAME_TO_SOIL_TYPE_PIPE.txt')
+file_format = ( format_name=GARDEN_PLANTS.VEGGIES.PIPECOLSEP_ONEHEADROW );
+
+
+-- Set your worksheet context to the correct database and schema
+USE ROLE ACCOUNTADMIN;
+USE DATABASE GARDEN_PLANTS;
+USE SCHEMA VEGGIES;
+
+-- Create the specific file format requested for the challenge
+CREATE OR REPLACE FILE FORMAT garden_plants.veggies.soil_type_table
+    TYPE = 'CSV'
+    FIELD_DELIMITER = '\t'                 -- Instructs Snowflake that columns are separated by tabs (.tsv)
+    SKIP_HEADER = 1                        -- Bypasses the initial descriptive title/header row
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'      -- Keeps text phrases containing internal punctuation unified
+    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE -- Safeguards against rows with extra unescaped commas throwing errors
+;
+
+-- Select and format the un-isolated data into discrete columns
+SELECT 
+    $1 AS SOIL_TYPE_ID, 
+    $2 AS SOIL_TYPE, 
+    $3 AS SOIL_DESCRIPTION
+FROM @util_db.public.my_internal_stage/LU_SOIL_TYPE.tsv
+(FILE_FORMAT => garden_plants.veggies.soil_type_table);
+
+
+--- creating soil type lookup table
+
+use role sysadmin;
+
+create or replace table LU_SOIL_TYPE(
+SOIL_TYPE_ID number,	
+SOIL_TYPE varchar(15),
+SOIL_DESCRIPTION varchar(75)
+);
+
+-- Copy data from the staged file directly into your structured table
+COPY INTO garden_plants.veggies.LU_SOIL_TYPE
+FROM @util_db.public.my_internal_stage/LU_SOIL_TYPE.tsv
+FILE_FORMAT = (FORMAT_NAME = 'garden_plants.veggies.soil_type_table')
+ON_ERROR = 'ABORT_STATEMENT' -- Fails safely if structural column alignments are broken
+;
+
+-- Check your final table results
+SELECT * FROM garden_plants.veggies.LU_SOIL_TYPE;
+
+
+
+-- CHALLENGE CREATE A FILE FORMAT,USE IT IN COPY INTO
+
+-- Ensure the proper role and context are active
+USE ROLE SYSADMIN;
+USE DATABASE GARDEN_PLANTS;
+USE SCHEMA VEGGIES;
+
+-- Create the table using matching headers and optimal data types
+CREATE OR REPLACE TABLE garden_plants.veggies.VEGETABLE_DETAILS_PLANT_HEIGHT (
+    PLANT_NAME        VARCHAR(100),
+    UOM               VARCHAR(10),
+    LOW_END_OF_RANGE  NUMBER(5,2),
+    HIGH_END_OF_RANGE NUMBER(5,2)
+);
+
+
+-- Load the staged CSV file directly into your new table
+COPY INTO garden_plants.veggies.VEGETABLE_DETAILS_PLANT_HEIGHT
+FROM @util_db.public.my_internal_stage/veg_plant_height.csv
+FILE_FORMAT = (FORMAT_NAME = 'garden_plants.veggies.COMMASEP_DBLQUOT_ONEHEADROW')
+ON_ERROR = 'ABORT_STATEMENT';
+
+SELECT * FROM garden_plants.veggies.VEGETABLE_DETAILS_PLANT_HEIGHT;
