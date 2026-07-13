@@ -1,0 +1,101 @@
+-- CREATING ROOT_DEPTH TABLE INSIDE THE SCHEMA VEGGIES 
+
+   create or replace table ROOT_DEPTH (
+   ROOT_DEPTH_ID number(1), 
+   ROOT_DEPTH_CODE text(1), 
+   ROOT_DEPTH_NAME text(7), 
+   UNIT_OF_MEASURE text(2),
+   RANGE_MIN number(2),
+   RANGE_MAX number(2)
+   ); 
+   
+
+   -- INSERTING ROW INTO ROOT_DEPTH TABLE
+   insert into root_depth 
+   values
+   (
+    1,
+    'S',
+    'Shallow',
+    'cm',
+    30,
+    45
+    );
+
+-- BY MISTAKE I RAN THE ABOVE INSERT STATEMENT TWO TIMES SO 2 ROWS HAVE BEEN INSERTED
+-- TO DELETE ONE ROW BELOW IS THE CODE TO RUN AND AFTER RUNNNIG BELOW CODE ONE ROW        REMAINS.
+
+   DELETE FROM root_depth
+   USING (
+    SELECT root_depth_id, root_depth_code, root_depth_name, unit_of_measure,               range_min, range_max,
+           ROW_NUMBER() OVER (
+                PARTITION BY root_depth_id, root_depth_code, root_depth_name,               unit_of_measure, range_min, range_max
+                ORDER BY root_depth_id
+           ) AS rn
+    FROM root_depth
+   ) AS dupes
+  WHERE root_depth.root_depth_id = dupes.root_depth_id
+  AND root_depth.root_depth_code = dupes.root_depth_code
+  AND root_depth.root_depth_name = dupes.root_depth_name
+  AND root_depth.unit_of_measure = dupes.unit_of_measure
+  AND root_depth.range_min = dupes.range_min
+  AND root_depth.range_max = dupes.range_max
+  AND dupes.rn > 1;
+
+
+  -- SOME RANDOM SQL CODE RUN
+    SELECT *
+    FROM ROOT_DEPTH 
+    LIMIT 1;
+    
+
+-- INSERTING 2 MORE ROWS INTO THE ROOT_DEPTH
+   insert into root_depth 
+   values
+   (
+    2,
+    'M',
+    'Medium',
+    'cm',
+    45,
+    60
+    );
+
+       insert into root_depth 
+   values
+   (
+    3,
+    'D',
+    'Deep',
+    'cm',
+    60,
+    90
+    );
+
+-- LIST OUT ALL THE ROWS IN ROOT_DEPTH
+   SELECT * FROM ROOT_DEPTH;
+
+-- SO IN THE OUTPUT (BADGE - USE VARIABLES IN NOTEBOOK I SHOULD GET ONLY 1 LILAC BUT IN OUTPUT I GOT 2 SO WE ARE RUNNING THIS CODE ANDD THEN WE REMOVE DUPLIATES)
+   SELECT
+    PLANT_NAME,
+    ROOT_DEPTH_CODE,
+    COUNT(*) AS CNT
+FROM GARDEN_PLANTS.FLOWERS.FLOWER_DETAILS
+GROUP BY
+    PLANT_NAME,
+    ROOT_DEPTH_CODE;
+
+    TRUNCATE TABLE GARDEN_PLANTS.FLOWERS.FLOWER_DETAILS;
+
+     INSERT INTO GARDEN_PLANTS.FLOWERS.FLOWER_DETAILS
+VALUES
+('Petunia','M');
+
+INSERT INTO GARDEN_PLANTS.FLOWERS.FLOWER_DETAILS
+VALUES
+('Lilac','S');
+
+-- RUN SELECT COMMAND TO LIST OUT ALL THE ROWS IN THE TABLE
+SELECT *
+FROM GARDEN_PLANTS.FLOWERS.FLOWER_DETAILS;
+
